@@ -30,7 +30,7 @@ def load_data():
     return res
 
 
-@memory.cache(ignore=['docs'])
+# @memory.cache(ignore=['docs'])
 def gen_tables(docs):
     # load required glove vectors
     word_to_freq = defaultdict(int)
@@ -44,7 +44,7 @@ def gen_tables(docs):
         for line in sr:
             words = line.split(' ')
             if words[0] in word_to_freq:
-                vecs.append(np.array(list(map(float, words[1:]))))
+                vecs.append(np.array(list(map(np.float32, words[1:]))))
                 word_to_index[words[0]] = len(word_to_index)
 
     # visualize embeddings
@@ -68,7 +68,7 @@ def gen_tables(docs):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver({'emb_word': emb_word})
-        saver.save(sess, os.path.join(path, 'model.ckpt'))
+        saver.save(sess, os.path.join(path, 'model.ckpt'), write_meta_graph=False)
 
     return word_to_index
 

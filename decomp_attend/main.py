@@ -48,12 +48,12 @@ def gen_tables(docs):
                 word_to_index[words[0]] = len(word_to_index)
 
     # visualize embeddings
-    path = '__cache__/tf/emb_word'
+    path = '__cache__/tf/emb'
     os.makedirs(path, exist_ok=True)
     config = projector.ProjectorConfig()
     emb_conf = config.embeddings.add()
-    emb_conf.tensor_name = 'emb_word'
-    emb_conf.metadata_path = os.path.abspath(os.path.join(path, 'emb_word_metadata.tsv'))
+    emb_conf.tensor_name = 'emb'
+    emb_conf.metadata_path = os.path.abspath(os.path.join(path, 'emb_metadata.tsv'))
     with open(emb_conf.metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile, delimiter='\t')
         writer.writerow(['Word', 'Frequency'])
@@ -64,10 +64,10 @@ def gen_tables(docs):
             writer.writerow([word, word_to_freq[word]])
     summary_writer = tf.summary.FileWriter(path)
     projector.visualize_embeddings(summary_writer, config)
-    emb_word = tf.Variable(tf.constant(np.array(vecs)))
+    emb = tf.Variable(tf.constant(np.array(vecs)))
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        saver = tf.train.Saver({'emb_word': emb_word})
+        saver = tf.train.Saver({'emb': emb})
         saver.save(sess, os.path.join(path, 'model.ckpt'), write_meta_graph=False)
 
     return word_to_index

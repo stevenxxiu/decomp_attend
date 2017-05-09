@@ -10,6 +10,7 @@ import tensorflow as tf
 from tensorflow.contrib.opt import LazyAdamOptimizer
 from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.ops import init_ops
+from tensorflow.python.layers.core import Dense
 
 memory = joblib.Memory('__cache__', verbose=0)
 
@@ -30,7 +31,7 @@ def load_data():
     return res
 
 
-# @memory.cache(ignore=['docs'])
+@memory.cache(ignore=['docs'])
 def gen_tables(docs):
     # load required glove vectors
     word_to_freq = defaultdict(int)
@@ -73,13 +74,78 @@ def gen_tables(docs):
     return word_to_index
 
 
-def run_model():
-    pass
+def run_model(docs, word_to_index, num_unknown, embedding_size, lr, batch_size, epoch_size):
+    # network
+    tf.reset_default_graph()
+    X_doc_1 = tf.placeholder(tf.int32, [None, None])
+    X_doc_2 = tf.placeholder(tf.int32, [None, None])
+    mask_1 = tf.placeholder(tf.float32, [None, None])
+    mask_2 = tf.placeholder(tf.float32, [None, None])
+    y = tf.placeholder(tf.int32, [None])
+
+    emb = tf.Variable(tf.random_normal([len(word_to_index) + num_unknown, embedding_size], 0, 1))
+    emb_1 = tf.nn.embedding_lookup(emb, X_doc_1)
+    emb_2 = tf.nn.embedding_lookup(emb, X_doc_2)
+
+    l_attend = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    attend_d_1 = tf.nn.relu(l_attend.apply(emb_1))
+    attend_d_2 = tf.nn.relu(l_attend.apply(emb_2))
+    attend_e = tf.matmul(attend_d_1, tf.transpose(attend_d_2, [0, 2, 1]))
+    attend_mask_w_1 = tf.reshape(mask_1, [batch_size, 1, -1])
+    attend_mask_w_2 = tf.reshape(mask_2, [batch_size, 1, -1])
+    attend_norm_1 = tf.nn.softmax(attend_mask_w_2 * attend_e + (-1 / attend_mask_w_2 + 1))
+    attend_norm_2 = tf.nn.softmax(attend_mask_w_1 * tf.transpose(attend_e, [0, 2, 1]) + (-1 / attend_mask_w_1 + 1))
+    attend_1 = tf.matmul(attend_norm_1, emb_2)
+    attend_2 = tf.matmul(attend_norm_2, emb_1)
+
+    l_compare = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    compare_1 = tf.nn.relu(l_compare.apply(tf.concat([emb_1, attend_1], 2)))
+    compare_2 = tf.nn.relu(l_compare.apply(tf.concat([emb_2, attend_2], 2)))
+
+    agg_1 = tf.reduce_sum(tf.reshape(mask_1, [batch_size, -1, 1]) * compare_1, 1)
+    agg_2 = tf.reduce_sum(tf.reshape(mask_2, [batch_size, -1, 1]) * compare_2, 1)
+    logits = tf.nn.relu(tf.layers.dense(
+        tf.concat([agg_1, agg_2], 1), 200, kernel_initializer=init_ops.RandomNormal(0, 0.01)
+    ))
+    logits = tf.layers.dense(logits, 3, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=y))
+    train_op = LazyAdamOptimizer(learning_rate=lr).minimize(loss)
+
+    # run
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        pass
+
+        # XXX prepend each sentence with null token
+        # XXX sort so sentences have similar lengths according to paper
+
+        # # train
+        # print(datetime.datetime.now(), 'started training')
+        # q = Queue(1)
+        # Process(target=dbow_sample, args=(docs, word_to_index, word_to_freq, sample, epoch_size, q)).start()
+        # for i in range(epoch_size):
+        #     X_doc_, y_ = q.get()
+        #     p = np.random.permutation(len(y_))
+        #     total_loss = 0
+        #     for j in range(0, len(y_), batch_size):
+        #         k = p[j:j + batch_size]
+        #         _, batch_loss = sess.run([train_op, loss], feed_dict={X_doc: X_doc_[k], y: y_[k]})
+        #         total_loss += batch_loss
+        #     print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
+        #
+        # # save
+        # path = os.path.join('__cache__', 'tf', f'dbow-{name}-{uuid.uuid4()}')
+        # os.makedirs(path)
+        # save_model(path, docs, word_to_index, word_to_freq, emb_doc, None, l.W, sess)
+        # return path
 
 
 def main():
     train, val, test = load_data()
-    gen_tables(train)
+    word_to_index = gen_tables(train)
+    run_model(
+        train, word_to_index=word_to_index, num_unknown=100, embedding_size=300, lr=0.01, batch_size=2, epoch_size=360
+    )
 
 
 if __name__ == '__main__':

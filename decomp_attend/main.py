@@ -94,6 +94,7 @@ def run_model(docs, word_to_index, num_unknown, embedding_size, dropout_rate, lr
     attend_e = tf.matmul(attend_d_1, tf.transpose(attend_d_2, [0, 2, 1]))
     attend_mask_w_1 = tf.reshape(mask_1, [batch_size, 1, -1])
     attend_mask_w_2 = tf.reshape(mask_2, [batch_size, 1, -1])
+    # attend_norm_1 are the weights to attend for in sentence 2 for each word of sentence 1
     attend_norm_1 = tf.nn.softmax(attend_mask_w_2 * attend_e + (-1 / attend_mask_w_2 + 1))
     attend_norm_2 = tf.nn.softmax(attend_mask_w_1 * tf.transpose(attend_e, [0, 2, 1]) + (-1 / attend_mask_w_1 + 1))
     attend_1 = tf.matmul(attend_norm_1, emb_2)
@@ -115,6 +116,8 @@ def run_model(docs, word_to_index, num_unknown, embedding_size, dropout_rate, lr
     logits = tf.layers.dense(logits, 3, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=y))
     train_op = LazyAdamOptimizer(learning_rate=lr).minimize(loss)
+
+    # XXX do not train embeddings
 
     # run
     with tf.Session() as sess:

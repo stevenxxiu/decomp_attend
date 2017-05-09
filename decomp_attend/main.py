@@ -112,7 +112,7 @@ def sample(docs, word_to_index, num_unknown, epoch_size, batch_size, q):
         q.put(res)
 
 
-def run_model(docs, word_to_index, num_unknown, embedding_size, dropout_rate, lr, batch_size, epoch_size):
+def run_model(train, val, test, word_to_index, num_unknown, embedding_size, dropout_rate, lr, batch_size, epoch_size):
     # special words
     word_to_index['\0'] = len(word_to_index)
 
@@ -168,8 +168,9 @@ def run_model(docs, word_to_index, num_unknown, embedding_size, dropout_rate, lr
         sess.run(tf.global_variables_initializer())
 
         # start sampling
-        q = Queue(1)
-        Process(target=sample, args=(docs, word_to_index, num_unknown, epoch_size, batch_size, q)).start()
+        q_train, q_valid = Queue(1), Queue(1)
+        Process(target=sample, args=(train, word_to_index, num_unknown, epoch_size, batch_size, q_train)).start()
+        Process(target=sample, args=(val, word_to_index, num_unknown, epoch_size, batch_size, q_valid)).start()
 
         # load pretrained word embeddings
         emb_0 = tf.Variable(0., validate_shape=False)
@@ -180,21 +181,28 @@ def run_model(docs, word_to_index, num_unknown, embedding_size, dropout_rate, lr
         # train
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            total_loss = 0
-            res = q.get()
-            for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in res:
+            total_loss, val_correct = 0, 0
+            for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in q_train.get():
                 _, batch_loss = sess.run([train_op, loss], feed_dict={
                     X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: True,
                 })
-                total_loss += batch_loss
-            print(datetime.datetime.now(), f'finished epoch {i}, loss: {total_loss / len(y_):f}')
+                total_loss += len(y_) * batch_loss
+            for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in q_valid.get():
+                logits_ = sess.run(logits, feed_dict={
+                    X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: False,
+                })
+                val_correct += np.sum(np.argmax(logits_, 1) == y_)
+            print(
+                datetime.datetime.now(),
+                f'finished epoch {i}, loss: {total_loss / len(train):f}, accuracy: {val_correct / len(val):f}'
+            )
 
 
 def main():
     train, val, test = load_data()
     word_to_index = gen_tables(train)
     run_model(
-        train, word_to_index=word_to_index, num_unknown=100, embedding_size=300, dropout_rate=0.2, lr=0.01,
+        train, val, test, word_to_index=word_to_index, num_unknown=100, embedding_size=300, dropout_rate=0.2, lr=0.01,
         batch_size=512, epoch_size=360
     )
 

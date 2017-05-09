@@ -10,7 +10,7 @@ import tensorflow as tf
 from tensorflow.contrib.opt import LazyAdamOptimizer
 from tensorflow.contrib.tensorboard.plugins import projector
 from tensorflow.python.ops import init_ops
-from tensorflow.python.layers.core import Dense
+from tensorflow.python.layers.core import Dense, Dropout
 
 memory = joblib.Memory('__cache__', verbose=0)
 
@@ -74,7 +74,7 @@ def gen_tables(docs):
     return word_to_index
 
 
-def run_model(docs, word_to_index, num_unknown, embedding_size, lr, batch_size, epoch_size):
+def run_model(docs, word_to_index, num_unknown, embedding_size, dropout_rate, lr, batch_size, epoch_size):
     # network
     tf.reset_default_graph()
     X_doc_1 = tf.placeholder(tf.int32, [None, None])
@@ -82,14 +82,15 @@ def run_model(docs, word_to_index, num_unknown, embedding_size, lr, batch_size, 
     mask_1 = tf.placeholder(tf.float32, [None, None])
     mask_2 = tf.placeholder(tf.float32, [None, None])
     y = tf.placeholder(tf.int32, [None])
+    training = tf.placeholder(tf.bool, [])
 
     emb = tf.Variable(tf.random_normal([len(word_to_index) + num_unknown, embedding_size], 0, 1))
     emb_1 = tf.nn.embedding_lookup(emb, X_doc_1)
     emb_2 = tf.nn.embedding_lookup(emb, X_doc_2)
 
     l_attend = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    attend_d_1 = tf.nn.relu(l_attend.apply(emb_1))
-    attend_d_2 = tf.nn.relu(l_attend.apply(emb_2))
+    attend_d_1 = tf.nn.relu(tf.layers.dropout(l_attend.apply(emb_1), rate=dropout_rate, training=training))
+    attend_d_2 = tf.nn.relu(tf.layers.dropout(l_attend.apply(emb_2), rate=dropout_rate, training=training))
     attend_e = tf.matmul(attend_d_1, tf.transpose(attend_d_2, [0, 2, 1]))
     attend_mask_w_1 = tf.reshape(mask_1, [batch_size, 1, -1])
     attend_mask_w_2 = tf.reshape(mask_2, [batch_size, 1, -1])
@@ -99,14 +100,18 @@ def run_model(docs, word_to_index, num_unknown, embedding_size, lr, batch_size, 
     attend_2 = tf.matmul(attend_norm_2, emb_1)
 
     l_compare = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    compare_1 = tf.nn.relu(l_compare.apply(tf.concat([emb_1, attend_1], 2)))
-    compare_2 = tf.nn.relu(l_compare.apply(tf.concat([emb_2, attend_2], 2)))
+    compare_1 = tf.nn.relu(tf.layers.dropout(l_compare.apply(
+        tf.concat([emb_1, attend_1], 2)
+    ), rate=dropout_rate, training=training))
+    compare_2 = tf.nn.relu(tf.layers.dropout(l_compare.apply(
+        tf.concat([emb_2, attend_2], 2)
+    ), rate=dropout_rate, training=training))
 
     agg_1 = tf.reduce_sum(tf.reshape(mask_1, [batch_size, -1, 1]) * compare_1, 1)
     agg_2 = tf.reduce_sum(tf.reshape(mask_2, [batch_size, -1, 1]) * compare_2, 1)
-    logits = tf.nn.relu(tf.layers.dense(
+    logits = tf.nn.relu(tf.layers.dropout(tf.layers.dense(
         tf.concat([agg_1, agg_2], 1), 200, kernel_initializer=init_ops.RandomNormal(0, 0.01)
-    ))
+    ), rate=dropout_rate, training=training))
     logits = tf.layers.dense(logits, 3, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=y))
     train_op = LazyAdamOptimizer(learning_rate=lr).minimize(loss)
@@ -144,7 +149,8 @@ def main():
     train, val, test = load_data()
     word_to_index = gen_tables(train)
     run_model(
-        train, word_to_index=word_to_index, num_unknown=100, embedding_size=300, lr=0.01, batch_size=2, epoch_size=360
+        train, word_to_index=word_to_index, num_unknown=100, embedding_size=300, dropout_rate=0.2, lr=0.01,
+        batch_size=2, epoch_size=360
     )
 
 

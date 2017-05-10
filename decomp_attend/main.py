@@ -202,7 +202,7 @@ def main():
     train, val, test = load_data()
     word_to_index = gen_tables(train)
     run_model(
-        train, val, test, word_to_index=word_to_index, num_unknown=100, embedding_size=300, dropout_rate=0.2, lr=0.01,
+        train, val, test, word_to_index=word_to_index, num_unknown=100, embedding_size=300, dropout_rate=0.2, lr=0.001,
         batch_size=512, epoch_size=360
     )
 

@@ -186,6 +186,7 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
         saver = tf.train.Saver({'emb': emb_0})
         saver.restore(sess, '__cache__/tf/emb/model.ckpt')
         sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
+        sess.run(emb.assign(emb / tf.reshape(tf.norm(emb, axis=1), [-1, 1])))
 
         # train
         print(datetime.datetime.now(), 'started training')

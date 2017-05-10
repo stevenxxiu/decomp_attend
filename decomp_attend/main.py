@@ -124,7 +124,7 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
     mask_2 = tf.placeholder(tf.float32, [None, None])
     y = tf.placeholder(tf.int32, [None])
     training = tf.placeholder(tf.bool, [])
-    batch_size_ = tf.shape(y)[0]
+    batch_size_ = tf.shape(X_doc_1)[0]
 
     emb = tf.Variable(tf.random_normal([len(word_to_index) + num_unknown, embedding_size], 0, 1))
     emb_1 = tf.nn.embedding_lookup(emb, X_doc_1)
@@ -198,12 +198,12 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
                 total_loss += len(y_) * batch_loss
             for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in q_valid.get():
                 logits_ = sess.run(logits, feed_dict={
-                    X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: False,
+                    X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, training: False,
                 })
                 val_correct += np.sum(np.argmax(logits_, 1) == y_)
             for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in q_test.get():
                 logits_ = sess.run(logits, feed_dict={
-                    X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: False,
+                    X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, training: False,
                 })
                 test_correct += np.sum(np.argmax(logits_, 1) == y_)
             print(

@@ -1,8 +1,8 @@
 # A Decomposable Attention Model for Natural Language Inference
 This is an attempt to reproduce the paper using tensorflow.
 
-## Some issues in the paper
-If embeddings are project down to dimensions >= F's output dimension, then this is equivalent to altered weights in $F$, in the case of non intra-sentence attention, and to altered weights in $F_intra$, in the case of intra-sentence attention, so why project down at all? We do not project down for these reasons.
+## Some unexplained parts
+Projecting the embeddings down does not matter if we only had $F$ but does matter for $G$. Let $G$ have top half $G_1$ and bottom half $G_2$, then we require $u\cdot G_1 + v\cdot M_2 = u\cdot A\cdot B_1 + v\cdot A\cdot B_2$, so then $A\cdot [B_1 B_2] = [M_1 M_2]$, but LHS has rank $\le 200$ and RHS can have rank $300$. For the entire model the total # of parameters are in fact identical with or without the projection matrix for $n = 200$.
 
 ## Unclear parts
 How is the null embedding initialized? Is it trained? We suppose it is random and not trained like the other embeddings.

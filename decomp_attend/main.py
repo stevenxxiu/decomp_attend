@@ -127,8 +127,11 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
     batch_size_ = tf.shape(X_doc_1)[0]
 
     emb = tf.Variable(tf.random_normal([len(word_to_index) + num_unknown, embedding_size], 0, 1))
+    l_proj_emb = Dense(200, use_bias=False, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     emb_1 = tf.nn.embedding_lookup(emb, X_doc_1)
+    emb_1 = l_proj_emb.apply(emb_1)
     emb_2 = tf.nn.embedding_lookup(emb, X_doc_2)
+    emb_2 = l_proj_emb.apply(emb_2)
 
     l_attend_1 = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     l_attend_2 = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))

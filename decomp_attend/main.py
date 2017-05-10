@@ -168,9 +168,10 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
         sess.run(tf.global_variables_initializer())
 
         # start sampling
-        q_train, q_valid = Queue(1), Queue(1)
+        q_train, q_valid, q_test = Queue(1), Queue(1), Queue(1)
         Process(target=sample, args=(train, word_to_index, num_unknown, epoch_size, batch_size, q_train)).start()
         Process(target=sample, args=(val, word_to_index, num_unknown, epoch_size, batch_size, q_valid)).start()
+        Process(target=sample, args=(test, word_to_index, num_unknown, epoch_size, batch_size, q_test)).start()
 
         # load pretrained word embeddings
         emb_0 = tf.Variable(0., validate_shape=False)
@@ -181,7 +182,7 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
         # train
         print(datetime.datetime.now(), 'started training')
         for i in range(epoch_size):
-            total_loss, val_correct = 0, 0
+            total_loss, val_correct, test_correct = 0, 0, 0
             for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in q_train.get():
                 _, batch_loss = sess.run([train_op, loss], feed_dict={
                     X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: True,
@@ -192,9 +193,15 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
                     X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: False,
                 })
                 val_correct += np.sum(np.argmax(logits_, 1) == y_)
+            for X_doc_1_, X_doc_2_, mask_1_, mask_2_, y_ in q_test.get():
+                logits_ = sess.run(logits, feed_dict={
+                    X_doc_1: X_doc_1_, X_doc_2: X_doc_2_, mask_1: mask_1_, mask_2: mask_2_, y: y_, training: False,
+                })
+                test_correct += np.sum(np.argmax(logits_, 1) == y_)
             print(
                 datetime.datetime.now(),
-                f'finished epoch {i}, loss: {total_loss / len(train):f}, accuracy: {val_correct / len(val):f}'
+                f'finished epoch {i}, loss: {total_loss / len(train):f}, '
+                f'val acc: {val_correct / len(val):f}, test acc: {test_correct / len(test):f}'
             )
 
 

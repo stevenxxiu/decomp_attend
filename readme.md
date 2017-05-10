@@ -9,4 +9,4 @@ How is the null embedding initialized? Is it trained? We suppose it is random an
 If embeddings are project down to dimensions >= F's output dimension, then this is equivalent to altered weights in $F$, in the case of non intra-sentence attention, and to altered weights in $F_intra$, in the case of intra-sentence attention, so why project down at all? We do not project down for these reasons.
 
 ## Unclear parts
-F, G, H are probably all ReLU networks but this isn't specified in the paper. It is also somewhat unclear that they are 2 layer ReLU networks, as this matches the total # of parameters.
+F, G, H are probably all ReLU networks but this isn't specified in the paper. It is also somewhat unclear that they are 2 layer ReLU networks, as this matches the total # of parameters: $301 * 200 + 201 * 200 + 601 * 200 + 201 * 200 + 401 * 200 + 201 * 200 + 201 * 3$.

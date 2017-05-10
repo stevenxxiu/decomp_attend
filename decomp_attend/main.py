@@ -130,9 +130,12 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
     emb_1 = tf.nn.embedding_lookup(emb, X_doc_1)
     emb_2 = tf.nn.embedding_lookup(emb, X_doc_2)
 
-    l_attend = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    attend_d_1 = tf.nn.relu(tf.layers.dropout(l_attend.apply(emb_1), rate=dropout_rate, training=training))
-    attend_d_2 = tf.nn.relu(tf.layers.dropout(l_attend.apply(emb_2), rate=dropout_rate, training=training))
+    l_attend_1 = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    l_attend_2 = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    attend_d_1 = tf.nn.relu(tf.layers.dropout(l_attend_1.apply(emb_1), rate=dropout_rate, training=training))
+    attend_d_1 = tf.nn.relu(tf.layers.dropout(l_attend_2.apply(attend_d_1), rate=dropout_rate, training=training))
+    attend_d_2 = tf.nn.relu(tf.layers.dropout(l_attend_1.apply(emb_2), rate=dropout_rate, training=training))
+    attend_d_2 = tf.nn.relu(tf.layers.dropout(l_attend_2.apply(attend_d_2), rate=dropout_rate, training=training))
     attend_e = tf.matmul(attend_d_1, tf.transpose(attend_d_2, [0, 2, 1]))
     attend_mask_w_1 = tf.reshape(mask_1, [batch_size_, 1, -1])
     attend_mask_w_2 = tf.reshape(mask_2, [batch_size_, 1, -1])
@@ -142,18 +145,23 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
     attend_1 = tf.matmul(attend_norm_1, emb_2)
     attend_2 = tf.matmul(attend_norm_2, emb_1)
 
-    l_compare = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    compare_1 = tf.nn.relu(tf.layers.dropout(l_compare.apply(
-        tf.concat([emb_1, attend_1], 2)
-    ), rate=dropout_rate, training=training))
-    compare_2 = tf.nn.relu(tf.layers.dropout(l_compare.apply(
-        tf.concat([emb_2, attend_2], 2)
-    ), rate=dropout_rate, training=training))
+    l_compare_1 = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    l_compare_2 = Dense(200, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    compare_1 = tf.concat([emb_1, attend_1], 2)
+    compare_1 = tf.nn.relu(tf.layers.dropout(l_compare_1.apply(compare_1), rate=dropout_rate, training=training))
+    compare_1 = tf.nn.relu(tf.layers.dropout(l_compare_2.apply(compare_1), rate=dropout_rate, training=training))
+    compare_2 = tf.concat([emb_2, attend_2], 2)
+    compare_2 = tf.nn.relu(tf.layers.dropout(l_compare_1.apply(compare_2), rate=dropout_rate, training=training))
+    compare_2 = tf.nn.relu(tf.layers.dropout(l_compare_2.apply(compare_2), rate=dropout_rate, training=training))
 
     agg_1 = tf.reduce_sum(tf.reshape(mask_1, [batch_size_, -1, 1]) * compare_1, 1)
     agg_2 = tf.reduce_sum(tf.reshape(mask_2, [batch_size_, -1, 1]) * compare_2, 1)
+    logits = tf.concat([agg_1, agg_2], 1)
     logits = tf.nn.relu(tf.layers.dropout(tf.layers.dense(
-        tf.concat([agg_1, agg_2], 1), 200, kernel_initializer=init_ops.RandomNormal(0, 0.01)
+        logits, 200, kernel_initializer=init_ops.RandomNormal(0, 0.01)
+    ), rate=dropout_rate, training=training))
+    logits = tf.nn.relu(tf.layers.dropout(tf.layers.dense(
+        logits, 200, kernel_initializer=init_ops.RandomNormal(0, 0.01)
     ), rate=dropout_rate, training=training))
     logits = tf.layers.dense(logits, 3, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=y))

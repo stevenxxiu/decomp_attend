@@ -11,4 +11,6 @@ F, G, H are probably all ReLU networks but this isn't specified in the paper. It
 
 Not sure why paper states that they use the non-binary parse tokens as data when the binary parse and non-binary parse, but the tokens are the same when compared no matter the parse.
 
+It is unclear what consists of OOV, we suppose it is any vector that is not a GloVe vector.
+
 The OOV vectors are also probably normalized to l2 norm of 1 as this gives much better results.

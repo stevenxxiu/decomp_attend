@@ -112,7 +112,10 @@ def sample(docs, word_to_index, num_unknown, epoch_size, batch_size, q):
         q.put(res)
 
 
-def run_model(train, val, test, word_to_index, num_unknown, embedding_size, dropout_rate, lr, batch_size, epoch_size):
+def run_model(
+    train, val, test, word_to_index, num_unknown, embedding_size, center_emb, normalize_emb, pca_emb,
+    dropout_rate, lr, batch_size, epoch_size
+):
     # special words
     word_to_index['\0'] = len(word_to_index)
 
@@ -189,14 +192,16 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
         saver = tf.train.Saver({'emb': emb_0})
         saver.restore(sess, '__cache__/tf/emb/model.ckpt')
 
-        # center pretrained embeddings & initialize projection matrix with pca
-        # sess.run(emb_0.assign(emb_0 - tf.reshape(tf.reduce_mean(emb_0, axis=1), [-1, 1])))
-        # sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
-        # sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
-
-        # normalize embeddings
-        sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
-        sess.run(emb.assign(emb / tf.reshape(tf.norm(emb, axis=1), [-1, 1])))
+        # embedding transforms
+        if center_emb or pca_emb:
+            sess.run(emb_0.assign(emb_0 - tf.reshape(tf.reduce_mean(emb_0, axis=1), [-1, 1])))
+        if pca_emb:
+            if normalize_emb:
+                sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
+            sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
+        if normalize_emb:
+            sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
+            sess.run(emb.assign(emb / tf.reshape(tf.norm(emb, axis=1), [-1, 1])))
 
         # train
         print(datetime.datetime.now(), 'started training')
@@ -228,7 +233,8 @@ def main():
     train, val, test = load_data()
     word_to_index = gen_tables(train)
     run_model(
-        train, val, test, word_to_index=word_to_index, num_unknown=100, embedding_size=300, dropout_rate=0.2, lr=0.001,
+        train, val, test, word_to_index=word_to_index, num_unknown=100, embedding_size=300,
+        center_emb=False, pca_emb=False, normalize_emb=True, dropout_rate=0.2, lr=0.001,
         batch_size=512, epoch_size=400
     )
 

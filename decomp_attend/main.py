@@ -190,9 +190,9 @@ def run_model(train, val, test, word_to_index, num_unknown, embedding_size, drop
         saver.restore(sess, '__cache__/tf/emb/model.ckpt')
 
         # center pretrained embeddings & initialize projection matrix with pca
-        sess.run(emb_0.assign(emb_0 - tf.reshape(tf.reduce_mean(emb_0, axis=1), [-1, 1])))
-        sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
-        sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
+        # sess.run(emb_0.assign(emb_0 - tf.reshape(tf.reduce_mean(emb_0, axis=1), [-1, 1])))
+        # sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
+        # sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
 
         # normalize embeddings
         sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))

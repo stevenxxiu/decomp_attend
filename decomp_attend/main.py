@@ -1,16 +1,17 @@
 import csv
 import datetime
+import inspect
 import json
 import os
 import re
 from collections import defaultdict
+from multiprocessing import Process, Queue
 
 import joblib
 import numpy as np
 import tensorflow as tf
-from multiprocessing import Queue, Process
 from tensorflow.contrib.tensorboard.plugins import projector
-from tensorflow.python.layers.core import Dense
+from tensorflow.python.layers.core import Dense, Dropout
 from tensorflow.python.ops import init_ops
 
 memory = joblib.Memory('__cache__', verbose=0)
@@ -75,6 +76,13 @@ def gen_tables(docs):
     return word_to_index
 
 
+def apply_layers(layers, input_, **kwargs):
+    for layer in layers:
+        names = inspect.signature(layer.call).parameters
+        input_ = layer.apply(input_, **{name: arg for name, arg in kwargs.items() if name in names})
+    return input_
+
+
 def sample(docs, word_to_index, num_unknown, epoch_size, batch_size, q):
     # sort so sentences have similar lengths according to paper
     parts = [[], [], []]
@@ -113,8 +121,8 @@ def sample(docs, word_to_index, num_unknown, epoch_size, batch_size, q):
 
 
 def run_model(
-    train, val, test, word_to_index, intra_sent, num_unknown, embedding_size, center_emb, normalize_emb, proj_emb,
-    pca_proj_emb, dropout_rate, lr, batch_size, epoch_size
+    train, val, test, word_to_index, intra_sent, emb_unknown, emb_size, emb_center, emb_normalize, emb_proj,
+    emb_proj_pca, n_intra, n_intra_bias, n_attend, n_compare, n_classif, dropout_rate, lr, batch_size, epoch_size
 ):
     # special words
     word_to_index['\0'] = len(word_to_index)
@@ -129,35 +137,37 @@ def run_model(
     training = tf.placeholder(tf.bool, [])
     batch_size_ = tf.shape(X_doc_1)[0]
 
-    emb = tf.Variable(tf.random_normal([len(word_to_index) + num_unknown, embedding_size], 0, 1))
-    l_proj_emb = Dense(200, use_bias=False, kernel_initializer=init_ops.RandomNormal(0, 0.01))
+    emb = tf.Variable(tf.random_normal([len(word_to_index) + emb_unknown, emb_size], 0, 1))
+    l_proj_emb = Dense(emb_proj, use_bias=False, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     emb_ = [None, None]
     for i in range(2):
         emb_[i] = tf.nn.embedding_lookup(emb, [X_doc_1, X_doc_2][i])
-        if proj_emb:
+        if emb_proj:
             emb_[i] = l_proj_emb.apply(emb_[i])
 
     if intra_sent:
-        l_intra_1 = Dense(200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-        l_intra_2 = Dense(200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-        dist_biases = tf.Variable(tf.zeros([21]))
+        l_intra = sum([[
+            Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),
+            Dropout(rate=dropout_rate),
+        ] for n in n_intra], [])
+        dist_biases = tf.Variable(tf.zeros([2 * n_intra_bias + 1]))
         for i in range(2):
-            intra_d = tf.layers.dropout(l_intra_1.apply(emb_[i]), rate=dropout_rate, training=training)
-            intra_d = tf.layers.dropout(l_intra_2.apply(intra_d), rate=dropout_rate, training=training)
+            intra_d = apply_layers(l_intra, emb_[i], training=training)
             intra_i = tf.range(0, tf.shape([X_doc_1, X_doc_2][i])[1], dtype=tf.int32)
-            intra_ij = tf.clip_by_value(tf.reshape(intra_i, [-1, 1]) - tf.reshape(intra_i, [1, -1]) + 10, 0, 20)
+            intra_ij = tf.reshape(intra_i, [-1, 1]) - tf.reshape(intra_i, [1, -1])
+            intra_ij = tf.clip_by_value(intra_ij + n_intra_bias, 0, 2 * n_intra_bias)
             intra_w = tf.matmul(intra_d, tf.transpose(intra_d, [0, 2, 1])) + tf.gather(dist_biases, intra_ij)
             intra_mask = tf.reshape([mask_1, mask_2][i], [batch_size_, 1, -1])
             intra_norm = tf.nn.softmax(intra_mask * intra_w + (-1 / intra_mask + 1))
             intra = tf.matmul(intra_norm, emb_[i])
             emb_[i] = tf.concat([emb_[i], intra], 2)
 
-    l_attend_1 = Dense(200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    l_attend_2 = Dense(200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    attend_d_1 = tf.layers.dropout(l_attend_1.apply(emb_[0]), rate=dropout_rate, training=training)
-    attend_d_1 = tf.layers.dropout(l_attend_2.apply(attend_d_1), rate=dropout_rate, training=training)
-    attend_d_2 = tf.layers.dropout(l_attend_1.apply(emb_[1]), rate=dropout_rate, training=training)
-    attend_d_2 = tf.layers.dropout(l_attend_2.apply(attend_d_2), rate=dropout_rate, training=training)
+    l_attend = sum([[
+        Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),
+        Dropout(rate=dropout_rate),
+    ] for n in n_attend], [])
+    attend_d_1 = apply_layers(l_attend, emb_[0], training=training)
+    attend_d_2 = apply_layers(l_attend, emb_[1], training=training)
     attend_w = tf.matmul(attend_d_1, tf.transpose(attend_d_2, [0, 2, 1]))
     attend_mask_w_1 = tf.reshape(mask_1, [batch_size_, 1, -1])
     attend_mask_w_2 = tf.reshape(mask_2, [batch_size_, 1, -1])
@@ -167,22 +177,20 @@ def run_model(
     attend_1 = tf.matmul(attend_norm_1, emb_[1])
     attend_2 = tf.matmul(attend_norm_2, emb_[0])
 
-    l_compare_1 = Dense(200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    l_compare_2 = Dense(200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01))
-    compare = [None, None]
-    for i in range(2):
-        compare[i] = tf.concat([emb_[i], [attend_1, attend_2][i]], 2)
-        compare[i] = tf.layers.dropout(l_compare_1.apply(compare[i]), rate=dropout_rate, training=training)
-        compare[i] = tf.layers.dropout(l_compare_2.apply(compare[i]), rate=dropout_rate, training=training)
+    l_compare = sum([[
+        Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),
+        Dropout(rate=dropout_rate),
+    ] for n in n_compare], [])
+    compare_1 = apply_layers(l_compare, tf.concat([emb_[0], attend_1], 2), training=training)
+    compare_2 = apply_layers(l_compare, tf.concat([emb_[1], attend_2], 2), training=training)
 
-    agg = [tf.reduce_sum(tf.reshape([mask_1, mask_2][i], [batch_size_, -1, 1]) * compare[i], 1) for i in range(2)]
-    logits = tf.concat(agg, 1)
-    logits = tf.layers.dropout(tf.layers.dense(
-        logits, 200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)
-    ), rate=dropout_rate, training=training)
-    logits = tf.layers.dropout(tf.layers.dense(
-        logits, 200, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)
-    ), rate=dropout_rate, training=training)
+    agg_1 = tf.reduce_sum(tf.reshape(mask_1, [batch_size_, -1, 1]) * compare_1, 1)
+    agg_2 = tf.reduce_sum(tf.reshape(mask_2, [batch_size_, -1, 1]) * compare_2, 1)
+    l_classif = sum([[
+        Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),
+        Dropout(rate=dropout_rate),
+    ] for n in n_classif], [])
+    logits = apply_layers(l_classif, tf.concat([agg_1, agg_2], 1), training=training)
     logits = tf.layers.dense(logits, 3, kernel_initializer=init_ops.RandomNormal(0, 0.01))
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=y))
 
@@ -197,9 +205,9 @@ def run_model(
 
         # start sampling
         q_train, q_valid, q_test = Queue(1), Queue(1), Queue(1)
-        Process(target=sample, args=(train, word_to_index, num_unknown, epoch_size, batch_size, q_train)).start()
-        Process(target=sample, args=(val, word_to_index, num_unknown, epoch_size, batch_size, q_valid)).start()
-        Process(target=sample, args=(test, word_to_index, num_unknown, epoch_size, batch_size, q_test)).start()
+        Process(target=sample, args=(train, word_to_index, emb_unknown, epoch_size, batch_size, q_train)).start()
+        Process(target=sample, args=(val, word_to_index, emb_unknown, epoch_size, batch_size, q_valid)).start()
+        Process(target=sample, args=(test, word_to_index, emb_unknown, epoch_size, batch_size, q_test)).start()
 
         # load pretrained word embeddings
         emb_0 = tf.Variable(0., validate_shape=False)
@@ -207,13 +215,13 @@ def run_model(
         saver.restore(sess, '__cache__/tf/emb/model.ckpt')
 
         # embedding transforms
-        if center_emb or pca_proj_emb:
+        if emb_center or emb_proj_pca:
             sess.run(emb_0.assign(emb_0 - tf.reshape(tf.reduce_mean(emb_0, axis=1), [-1, 1])))
-        if pca_proj_emb:
-            if normalize_emb:
+        if emb_proj_pca:
+            if emb_normalize:
                 sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
             sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
-        if normalize_emb:
+        if emb_normalize:
             sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
             sess.run(emb.assign(emb / tf.reshape(tf.norm(emb, axis=1), [-1, 1])))
 
@@ -247,9 +255,10 @@ def main():
     train, val, test = load_data()
     word_to_index = gen_tables(train)
     run_model(
-        train, val, test, word_to_index=word_to_index, intra_sent=True, num_unknown=100, embedding_size=300,
-        center_emb=False, proj_emb=True, pca_proj_emb=False, normalize_emb=True, dropout_rate=0.2, lr=0.001,
-        batch_size=512, epoch_size=400
+        train, val, test, word_to_index=word_to_index, intra_sent=True, emb_unknown=100, emb_size=300,
+        emb_center=False, emb_proj=200, emb_proj_pca=False, emb_normalize=True,
+        n_intra=[200, 200], n_intra_bias=10, n_attend=[200, 200], n_compare=[200, 200], n_classif=[200, 200],
+        dropout_rate=0.2, lr=0.001, batch_size=512, epoch_size=400
     )
 
 if __name__ == '__main__':

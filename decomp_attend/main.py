@@ -256,9 +256,9 @@ def main():
     word_to_index = gen_tables(train)
     run_model(
         train, val, test, word_to_index=word_to_index, intra_sent=True, emb_unknown=100, emb_size=300,
-        emb_center=False, emb_proj=200, emb_proj_pca=False, emb_normalize=True,
+        emb_center=True, emb_proj=200, emb_proj_pca=True, emb_normalize=True,
         n_intra=[200, 200], n_intra_bias=10, n_attend=[200, 200], n_compare=[200, 200], n_classif=[200, 200],
-        dropout_rate=0.2, lr=0.001, batch_size=512, epoch_size=400
+        dropout_rate=0.5, lr=0.001, batch_size=512, epoch_size=400
     )
 
 if __name__ == '__main__':

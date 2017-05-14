@@ -1,3 +1,4 @@
+import argparse
 import csv
 import datetime
 import inspect
@@ -221,8 +222,8 @@ def run_model(
             if emb_normalize:
                 sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
             sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
+        sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
         if emb_normalize:
-            sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
             sess.run(emb.assign(emb / tf.reshape(tf.norm(emb, axis=1), [-1, 1])))
 
         # train
@@ -252,14 +253,13 @@ def run_model(
 
 
 def main():
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('hyperparams')
+    args = arg_parser.parse_args()
     train, val, test = load_data()
     word_to_index = gen_tables(train)
-    run_model(
-        train, val, test, word_to_index=word_to_index, intra_sent=True, emb_unknown=100, emb_size=300,
-        emb_center=True, emb_proj=200, emb_proj_pca=True, emb_normalize=True,
-        n_intra=[200, 200], n_intra_bias=10, n_attend=[200, 200], n_compare=[200, 200], n_classif=[200, 200],
-        dropout_rate=0.5, lr=0.001, batch_size=512, epoch_size=400
-    )
+    print(args.hyperparams)
+    run_model(train, val, test, word_to_index=word_to_index, **json.loads(args.hyperparams))
 
 if __name__ == '__main__':
     main()

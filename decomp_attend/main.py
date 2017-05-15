@@ -34,14 +34,15 @@ def load_data():
     return res
 
 
-@memory.cache(ignore=['docs'])
-def gen_tables(docs):
+@memory.cache(ignore=['train', 'val', 'test'])
+def gen_tables(train, val, test):
     # load required glove vectors
     word_to_freq = defaultdict(int)
-    for sent1, sent2, label in docs:
-        for sent in sent1, sent2:
-            for word in sent:
-                word_to_freq[word] += 1
+    for docs in train, val, test:
+        for sent1, sent2, label in docs:
+            for sent in sent1, sent2:
+                for word in sent:
+                    word_to_freq[word] += 1
     vecs = []
     word_to_index = {}
     with open('../data/glove/glove.840B.300d.txt', 'r', encoding='utf-8') as sr:
@@ -257,7 +258,7 @@ def main():
     arg_parser.add_argument('hyperparams')
     args = arg_parser.parse_args()
     train, val, test = load_data()
-    word_to_index = gen_tables(train)
+    word_to_index = gen_tables(train, val, test)
     print(args.hyperparams)
     run_model(train, val, test, word_to_index=word_to_index, **json.loads(args.hyperparams))
 

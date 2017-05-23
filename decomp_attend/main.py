@@ -122,6 +122,23 @@ def sample(docs, word_to_index, num_unknown, epoch_size, batch_size, q):
         q.put(res)
 
 
+def attend_intra(w, emb, mask, n_intra_bias, long_dist_bias, dist_biases, batch_size_):
+    i = tf.range(0, tf.shape(mask)[1], dtype=tf.int32)
+    ij = tf.reshape(i, [-1, 1]) - tf.reshape(i, [1, -1])
+    ij_mask = tf.cast(tf.logical_and(tf.less_equal(ij, n_intra_bias), tf.greater_equal(ij, -n_intra_bias)), tf.float32)
+    w = w + (1 - ij_mask) * long_dist_bias + ij_mask * tf.gather(dist_biases, ij + n_intra_bias)
+    mask = tf.reshape(mask, [batch_size_, 1, -1])
+    norm = tf.nn.softmax(mask * w + (-1 / mask + 1))
+    return tf.matmul(norm, emb)
+
+
+def attend_inter(w, emb, mask, batch_size_):
+    mask = tf.reshape(mask, [batch_size_, 1, -1])
+    norm = tf.nn.softmax(mask * w + (-1 / mask + 1))
+    return tf.matmul(norm, emb)
+
+
+# noinspection PyTypeChecker
 def run_model(
     train, val, test, word_to_index, intra_sent, emb_unknown, emb_size, emb_center, emb_normalize, emb_proj,
     emb_proj_pca, n_intra, n_intra_bias, n_attend, n_compare, n_classif, dropout_rate, lr, batch_size, epoch_size
@@ -152,17 +169,14 @@ def run_model(
             Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),
             Dropout(rate=dropout_rate),
         ] for n in n_intra], [])
+        long_dist_bias = tf.Variable(tf.zeros([]))
         dist_biases = tf.Variable(tf.zeros([2 * n_intra_bias + 1]))
         for i in range(2):
             intra_d = apply_layers(l_intra, emb_[i], training=training)
-            intra_i = tf.range(0, tf.shape([X_doc_1, X_doc_2][i])[1], dtype=tf.int32)
-            intra_ij = tf.reshape(intra_i, [-1, 1]) - tf.reshape(intra_i, [1, -1])
-            intra_ij = tf.clip_by_value(intra_ij + n_intra_bias, 0, 2 * n_intra_bias)
-            intra_w = tf.matmul(intra_d, tf.transpose(intra_d, [0, 2, 1])) + tf.gather(dist_biases, intra_ij)
-            intra_mask = tf.reshape([mask_1, mask_2][i], [batch_size_, 1, -1])
-            intra_norm = tf.nn.softmax(intra_mask * intra_w + (-1 / intra_mask + 1))
-            intra = tf.matmul(intra_norm, emb_[i])
-            emb_[i] = tf.concat([emb_[i], intra], 2)
+            intra_w = tf.matmul(intra_d, tf.transpose(intra_d, [0, 2, 1]))
+            emb_[i] = tf.concat([emb_[i], attend_intra(
+                intra_w, emb_[i], [mask_1, mask_2][i], n_intra_bias, long_dist_bias, dist_biases, batch_size_
+            )], 2)
 
     l_attend = sum([[
         Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),
@@ -171,13 +185,8 @@ def run_model(
     attend_d_1 = apply_layers(l_attend, emb_[0], training=training)
     attend_d_2 = apply_layers(l_attend, emb_[1], training=training)
     attend_w = tf.matmul(attend_d_1, tf.transpose(attend_d_2, [0, 2, 1]))
-    attend_mask_w_1 = tf.reshape(mask_1, [batch_size_, 1, -1])
-    attend_mask_w_2 = tf.reshape(mask_2, [batch_size_, 1, -1])
-    # attend_norm_1 are the weights to attend for in sentence 2 for each word of sentence 1
-    attend_norm_1 = tf.nn.softmax(attend_mask_w_2 * attend_w + (-1 / attend_mask_w_2 + 1))
-    attend_norm_2 = tf.nn.softmax(attend_mask_w_1 * tf.transpose(attend_w, [0, 2, 1]) + (-1 / attend_mask_w_1 + 1))
-    attend_1 = tf.matmul(attend_norm_1, emb_[1])
-    attend_2 = tf.matmul(attend_norm_2, emb_[0])
+    attend_1 = attend_inter(attend_w, emb_[1], mask_2, batch_size_)
+    attend_2 = attend_inter(tf.transpose(attend_w, [0, 2, 1]), emb_[0], mask_1, batch_size_)
 
     l_compare = sum([[
         Dense(n, tf.nn.relu, kernel_initializer=init_ops.RandomNormal(0, 0.01)),

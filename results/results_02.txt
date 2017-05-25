@@ -1,9 +1,9 @@
-{
+'{
     "intra_sent": false, "emb_unknown": 100, "emb_size": 300,
     "emb_center": false, "emb_proj": 0, "emb_proj_pca": false, "emb_normalize": true,
     "n_intra": [200, 200], "n_intra_bias": 10, "n_attend": [200, 200], "n_compare": [200, 200], "n_classif": [200, 200],
     "dropout_rate": 0.2, "lr": 0.0005, "batch_size": 256, "epoch_size": 400
-}
+}'
 2017-05-16 12:14:17.795993 started training
 2017-05-16 12:15:14.235710 finished epoch 0, loss: 0.843578, val acc: 0.703922, test acc: 0.705008
 2017-05-16 12:15:55.059108 finished epoch 1, loss: 0.666650, val acc: 0.764072, test acc: 0.765472

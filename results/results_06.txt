@@ -1,4 +1,9 @@
-{"intra_sent": true, "emb_unknown": 100, "emb_size": 300, "emb_center": false, "emb_proj": 200, "emb_proj_pca": false, "emb_normalize": true, "n_intra": [200, 200], "n_intra_bias": 10, "n_attend": [200, 200], "n_compare": [200, 200], "n_classif": [200, 200], "dropout_rate": 0.2, "lr": 0.0005, "batch_size": 256, "epoch_size": 400}
+'{
+    "intra_sent": true, "emb_unknown": 100, "emb_size": 300,
+    "emb_center": false, "emb_proj": 200, "emb_proj_pca": false, "emb_normalize": true,
+    "n_intra": [200, 200], "n_intra_bias": 10, "n_attend": [200, 200], "n_compare": [200, 200], "n_classif": [200, 200],
+    "dropout_rate": 0.2, "lr": 0.0005, "batch_size": 256, "epoch_size": 400
+}'
 2017-05-24 14:36:21.020877 started training
 2017-05-24 14:37:47.931111 finished epoch 0, loss: 0.819051, val acc: 0.708799, test acc: 0.712948
 2017-05-24 14:39:08.507068 finished epoch 1, loss: 0.656200, val acc: 0.771388, test acc: 0.774735

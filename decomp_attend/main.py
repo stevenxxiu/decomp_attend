@@ -5,6 +5,8 @@ import inspect
 import json
 import os
 import re
+import shlex
+import sys
 from collections import defaultdict
 from multiprocessing import Process, Queue
 
@@ -263,12 +265,12 @@ def run_model(
 
 
 def main():
+    print(' '.join(shlex.quote(arg) for arg in sys.argv[1:]))
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('hyperparams')
     args = arg_parser.parse_args()
     train, val, test = load_data()
     word_to_index = gen_tables(train, val, test)
-    print(args.hyperparams)
     run_model(train, val, test, word_to_index=word_to_index, **json.loads(args.hyperparams))
 
 if __name__ == '__main__':

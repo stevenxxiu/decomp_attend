@@ -1,6 +1,6 @@
 '{
     "intra_sent": true, "emb_unknown": 100, "emb_size": 300,
-    "emb_center": false, "emb_proj": 200, "emb_proj_pca": false, "emb_normalize": true,
+    "emb_proj": 200, "emb_proj_pca": false, "emb_normalize": true,
     "n_intra": [200, 200], "n_intra_bias": 10, "n_attend": [200, 200], "n_compare": [200, 200], "n_classif": [200, 200],
     "dropout_rate": 0.2, "lr": 0.0005, "batch_size": 256, "epoch_size": 400
 }'

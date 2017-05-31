@@ -142,7 +142,7 @@ def attend_inter(w, emb, mask, batch_size_):
 
 # noinspection PyTypeChecker
 def run_model(
-    train, val, test, word_to_index, intra_sent, emb_unknown, emb_size, emb_center, emb_normalize, emb_proj,
+    train, val, test, word_to_index, intra_sent, emb_unknown, emb_size, emb_normalize, emb_proj,
     emb_proj_pca, n_intra, n_intra_bias, n_attend, n_compare, n_classif, dropout_rate, lr, batch_size, epoch_size
 ):
     # special words
@@ -228,15 +228,13 @@ def run_model(
         saver.restore(sess, '__cache__/tf/emb/model.ckpt')
 
         # embedding transforms
-        if emb_center or emb_proj_pca:
-            sess.run(emb_0.assign(emb_0 - tf.reshape(tf.reduce_mean(emb_0, axis=1), [-1, 1])))
-        if emb_proj_pca:
-            if emb_normalize:
-                sess.run(emb_0.assign(emb_0 / tf.reshape(tf.norm(emb_0, axis=1), [-1, 1])))
-            sess.run(l_proj_emb.kernel.assign(tf.svd(emb_0)[2][:, :200]))
         sess.run(emb[:tf.shape(emb_0)[0]].assign(emb_0))
         if emb_normalize:
             sess.run(emb.assign(emb / tf.reshape(tf.norm(emb, axis=1), [-1, 1])))
+        if emb_proj_pca:
+            # centering has no effect as bias can be absorbed in the next layer's bias
+            sess.run(emb.assign(emb - tf.reshape(tf.reduce_mean(emb, axis=0), [1, -1])))
+            sess.run(l_proj_emb.kernel.assign(tf.svd(emb)[2][:, :200]))
 
         # train
         print(datetime.datetime.now(), 'started training')

@@ -23,7 +23,7 @@ memory = joblib.Memory('__cache__', verbose=0)
 def load_data():
     res = []
     for file in ('snli_1.0_train.jsonl', 'snli_1.0_dev.jsonl', 'snli_1.0_test.jsonl'):
-        with open(f'../data/stanford_natural_language_inference/{file}', 'r', encoding='utf-8') as sr:
+        with open(f'../../data/stanford_natural_language_inference/{file}', 'r', encoding='utf-8') as sr:
             cur_res = []
             for line in sr:
                 obj = json.loads(line)
@@ -47,7 +47,7 @@ def gen_tables(train, val, test):
                     word_to_freq[word] += 1
     vecs = []
     word_to_index = {}
-    with open('../data/glove/glove.840B.300d.txt', 'r', encoding='utf-8') as sr:
+    with open('../../data/glove/glove.840B.300d.txt', 'r', encoding='utf-8') as sr:
         for line in sr:
             words = line.split(' ')
             if words[0] in word_to_freq:

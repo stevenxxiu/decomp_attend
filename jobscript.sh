@@ -5,7 +5,7 @@
 #PBS -l mem=16GB
 #PBS -l walltime=20:00:00
 module load tensorflow/1.0.1-python3.5
-cd /short/cp1/sx6361/decomp_attend
+cd /short/cp1/sx6361/projects/decomp_attend
 python=/home/563/sx6361/.pyenv/versions/3.6.1/bin/python
 export PYTHONPATH="/home/563/sx6361/.pyenv/versions/3.6.1/lib/python3.6/site-packages:$PWD"
 export PYTHONUNBUFFERED=1

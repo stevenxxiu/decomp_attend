@@ -233,7 +233,7 @@ def run_model(
         if emb_proj_pca:
             # centering has no effect as bias can be absorbed in the next layer's bias
             sess.run(emb.assign(emb - tf.reshape(tf.reduce_mean(emb, axis=0), [1, -1])))
-            sess.run(l_proj_emb.kernel.assign(tf.svd(emb)[2][:, :200]))
+            sess.run(l_proj_emb.kernel.assign(tf.svd(emb)[2][:, :emb_proj]))
 
         # train
         print(datetime.datetime.now(), 'started training')
